@@ -12,28 +12,24 @@ import xyz.axxonte.database.*
 import java.util.*
 
 fun main() {
-//    val connections = Collections.synchronizedSet<Connection?>(LinkedHashSet())
-//    println("Server started")
-//    embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = { module(database = Manager().getDatabaseMap(), connections = connections) })
-//        .start(wait = true)
 
     val logger = LoggerFactory.getLogger(Application::class.java)
-    //webSocket("/loginComputer") { // Route pour la connexion d'un ordinateur au serveur
-    //val thisConnection = Connection(this) //Connexion actuelle
 
-    // Séparation de la liste des connexions par type pour une recherche simplifiée
+    val mobileList = mutableListOf<Socket>()  // Liste des mobiles connectés
+    val computerList = mutableListOf<Socket>()  // Liste des ordinateurs connectés
 
-    val mobileList = mutableListOf<Socket>()
-    val computerList = mutableListOf<Socket>()
+    // Stockage des channels d'écriture pour la console interne
+    val consoleWriteChannel = mutableMapOf<Socket, ByteWriteChannel>()
 
-
-    //Interface de commande interne
+    //*******************************************************************************//
+    //                      Interface de commande interne                            //
+    //*******************************************************************************//
     Thread {
         while (true) {
             println("Commande Serveur : ")
             val cmd = readLine()
             if (cmd != null) {
-                when (cmd.lowercase(Locale.getDefault())) {
+                when (cmd.lowercase(Locale.getDefault()).split(' ')[0]) {
                     "exit", "stop" -> {
                         println("Fermeture des connexions ...")
                         for (socket in mobileList) {
@@ -74,17 +70,62 @@ fun main() {
                         println("Utilisateurs effacés")
                     }
 
-                    "mobileList" -> {
+                    "mobilelist" -> {
                         println("Liste des mobiles connectés : ")
                         mobileList.forEach{
                             println("Socket : ${it.remoteAddress} ConnectionType : ${it}")
                         }
                     }
 
-                    "computerList" -> {
+                    "computerlist" -> {
                         println("Liste des ordinateurs connectés : ")
                         computerList.forEach{
                             println("Socket : ${it.remoteAddress} ConnectionType : ${it}")
+                        }
+                    }
+
+                    "cmd" -> {
+                        try {
+                            val targetip = cmd.split(' ').get(1)
+                            var target : Socket? = null
+                            var sendChannel : ByteWriteChannel? = null
+
+                            var exitcmd = false
+
+                            for (socket in computerList) {
+                                if (socket.remoteAddress.toString() == targetip) {
+                                    target = socket
+                                    sendChannel = consoleWriteChannel[socket]
+                                }
+                            }
+
+                            if (target == null) {
+                                throw Exception("Cible introuvable")
+                            }
+
+                            while (!exitcmd) {
+                                println("Commande cible : ")
+                                val remoteCmd = readLine()
+                                if (remoteCmd != null) {
+                                    if (cmd.lowercase(Locale.getDefault()) == "exit") {
+                                        exitcmd = true
+                                    } else {
+                                        when (remoteCmd.lowercase(Locale.getDefault())) {
+                                            "stop" -> {
+                                                runBlocking {
+                                                    sendChannel!!.writeStringUtf8("stop\n")
+                                                }
+                                            }
+
+                                        }
+                                    }
+                                }
+                            }
+
+
+
+                        } catch (e: Exception) {
+                            println(e.localizedMessage)
                         }
                     }
 
@@ -102,8 +143,6 @@ fun main() {
     // Declaration des variables globales
     lateinit var serverSocket: ServerSocket
     lateinit var selectorManager: SelectorManager
-//    lateinit var receiveChannel: ByteReadChannel
-//    lateinit var sendChannel: ByteWriteChannel
     lateinit var socket: Socket
 
     var allSetup: Boolean
@@ -136,6 +175,8 @@ fun main() {
                         logger.debug("Sended Greetings")
                         allSetup = true
 
+                        // Stockage du channel d'écriture
+                        consoleWriteChannel.put(localSocket, sendChannel)
 
                         // Demande d'identification du client : COMPUTER ou MOBILE
 
@@ -145,8 +186,10 @@ fun main() {
                         println(received)
                         if (received == "COMPUTER") {
                             computerList.add(localSocket)
+                            sendChannel.writeStringUtf8("COMPUTER\n") // Acquittement de l'identification
                         } else if (received == "MOBILE") {
                             mobileList.add(localSocket)
+                            sendChannel.writeStringUtf8("MOBILE\n") // Acquittement de l'identification
                         } else {
                             socket.close()
                             logger.debug("Socket closed : ${socket.remoteAddress}")
@@ -288,7 +331,8 @@ fun main() {
                                         }
                                     }
 
-                                    "computerList" -> {
+                                    /* TODO : Quand la gestions des ordinateurs en dabase sera implémentée */
+                                    /*"computerList" -> {
 
                                         var localComputerList: List<ExposedComputer?>
                                         runBlocking {
@@ -311,9 +355,8 @@ fun main() {
                                         logger.debug("")
 
                                         sendChannel.writeStringUtf8(computerListOutput + "\n")
-                                        /* TODO : Envoi de la liste des ordinateurs || Ajouter un serialisateur*/
-
-                                    }
+                                        *//* TODO : Envoi de la liste des ordinateurs || Ajouter un serialisateur*//*
+                                    }*/
 
                                     else -> {
                                         sendChannel.writeStringUtf8("Unknown command\n")
