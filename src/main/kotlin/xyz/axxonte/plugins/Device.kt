@@ -1,4 +1,3 @@
 package xyz.axxonte.plugins
 
-class Device {
-}
+data class Device(val name: String)
